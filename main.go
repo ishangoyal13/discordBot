@@ -1,109 +1,47 @@
-package main
+package discord
 
 import (
-	"encoding/json"
-	"fmt"
-	"io/ioutil"
-
 	"github.com/bwmarrin/discordgo"
+	"github.com/sirupsen/logrus"
 )
 
-var (
-	Token     string
-	BotPrefix string
-
-	config *configStruct
-)
-
-type configStruct struct {
-	Token     string `json : "Token"`
-	BotPrefix string `json : "BotPrefix"`
+type DiscordConfig struct {
+	AuthToken string
 }
 
-func ReadConfig() error {
-	fmt.Println("Reading config file...")
-	file, err := ioutil.ReadFile("./config.json")
-
-	if err != nil {
-		fmt.Println(err.Error())
-		return err
-	}
-
-	fmt.Println(string(file))
-
-	err = json.Unmarshal(file, &config)
-
-	if err != nil {
-		fmt.Println(err.Error())
-		return err
-	}
-	Token = config.Token
-	BotPrefix = config.BotPrefix
-
-	return nil
-
+type discord struct {
+	logger *logrus.Logger
+	config *DiscordConfig
 }
 
-var BotId string
-var goBot *discordgo.Session
+type MessageTemplate discordgo.MessageSend
+type MessageEmbeds []*discordgo.MessageEmbed
+type MessageFile []*discordgo.File
+type MessageEmbedImg *discordgo.MessageEmbedImage
 
-func Start() {
-	goBot, err := discordgo.New("Bot " + config.Token)
-
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
-
-	u, err := goBot.User("@me")
-
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
-
-	BotId = u.ID
-
-	// var s *discordgo.Session
-
-	// _, _ = s.ChannelMessageSend("1128220386908176447", "pong")
-	// goBot.AddHandler(messageHandler)
-
-	msg := discordgo.MessageSend{
-		Content: "New Lead",
-		Embeds: []*discordgo.MessageEmbed{
-			{
-				Title: "partner lead is xxxxx",
-				Color: 16711680,
-			},
-		},
-	}
-
-	// yellow - 16776960
-	// green - 11403055
-	// red - 16711680
-
-	goBot.ChannelMessageSendComplex("1128220386908176447", &msg)
-
-	err = goBot.Open()
-
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
-	fmt.Println("Bot is running !")
+type discordClient interface {
+	SendDiscordMessage(channelId string, msgT discordgo.MessageSend)
 }
 
-func main() {
-	err := ReadConfig()
+func NewDiscordClient(logger *logrus.Logger, config *DiscordConfig) discordClient {
+	return &discord{
+		logger: logger,
+		config: config,
+	}
+}
 
+func (d *discord) SendDiscordMessage(channelId string, msg discordgo.MessageSend) {
+	goBot, err := discordgo.New("Bot " + d.config.AuthToken)
 	if err != nil {
-		fmt.Println(err.Error())
+		d.logger.Error("error in initialising ", err)
 		return
 	}
 
-	Start()
+	_, err = goBot.ChannelMessageSendComplex(channelId, &msg)
+	if err != nil {
+		d.logger.Error("unable to send message ", err)
+		return
+	}
 
-	<-make(chan struct{})
-	return
+	d.logger.Info("Message sent successfully")
 }
